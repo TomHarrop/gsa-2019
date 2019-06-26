@@ -1,0 +1,102 @@
+
+\title
+    [GSA 2019]
+    {The genomes of three invasive social wasps}
+\author
+    {\mbox{Peter Dearden\inst{1},}
+\mbox{Elizabeth J. Duncan\inst{2},}
+\mbox{Gregory Gimenez\inst{2},}
+\mbox{Monica A. M. Gruber\inst{3},}
+\mbox{Joseph Guhlin\inst{1},}
+\mbox{\textbf{Tom Harrop}\inst{1},}
+\mbox{Philip J. Lester\inst{3},}
+\mbox{Gemma McLaughlin\inst{1},}
+\mbox{Elizabeth Permina\inst{1},}
+\mbox{Jessica Purcell\inst{4},}
+\mbox{Emily J. Remnant\inst{5},}
+\mbox{Peter Stockwell\inst{1},}
+\mbox{Oliver Quinn\inst{3},}
+\mbox{Erin E. Wilson-Rankin\inst{4}}
+}
+\institute[VFU] % (optional)
+{
+\inst{1} The University of Otago, Aotearoa New Zealand.
+\and
+\inst{2} University of Leeds, United Kingdom.
+  \and
+  \inst{3} Victoria University of Wellington, New Zealand
+  \and
+  \inst{4} University of California, USA.
+  \and
+  \inst{5} University of Sydney, Australia
+}
+
+
+% Enable lato (installed on unix with `tlmgr install lato`)
+\usepackage[defaultsans]{lato}
+% \usepackage[utf8]{inputenc}
+% \usepackage{coloremoji}
+% \usepackage{lmodern}
+
+% Enable citations in footnotes
+\usepackage{calc}
+\usepackage[absolute,overlay]{textpos}
+\setlength{\TPHorizModule}{1in + \hoffset + \oddsidemargin + \textwidth}
+\setlength{\TPVertModule}{\headheight + \textheight}
+\newcommand
+{\source}
+[1]
+{\scriptsize
+    \begin{textblock}{}[1, 0](1, 1)
+    \hfill #1
+    \end{textblock}}
+
+% Remove beamer template
+\setbeamertemplate{frametitle}
+{\begin{centering}\smallskip
+    \insertframetitle\par
+    \smallskip\end{centering}}
+\setbeamertemplate{itemize item}{$\bullet$}
+\setbeamertemplate{itemize subitem}{$\bullet$}
+\setbeamertemplate{navigation symbols}{}
+
+% Centre all figures
+\usepackage{letltxmacro}
+% Save the meaning of \includegraphics
+\usepackage{graphicx}
+\LetLtxMacro\latexincludegraphics\includegraphics
+% Update the include graphics command to include centering
+\renewcommand{\includegraphics}[2][]%
+  {\begin{center}
+  \latexincludegraphics[#1]{#2}
+  \end{center}}
+
+% Define beamer colours
+\definecolor{textcolour}{HTML}{797979}
+\definecolor{headingcolour}{HTML}{797979}
+\definecolor{linkcolour}{HTML}{440154}
+
+% Place colours
+\setbeamercolor{title}{fg=headingcolour}
+\setbeamercolor{frametitle}{fg=headingcolour}
+% \setbeamercolor{normal text}{fg=textcolour}
+\setbeamercolor{itemize item}{fg=linkcolour} % bullets
+\setbeamercolor{itemize subitem}{fg=linkcolour} % sub-bullets
+\setbeamercolor{block title}{fg=headingcolour,bg=linkcolour}
+\setbeamercolor{block body}{fg=headingcolour,bg=linkcolour}
+\setbeamercolor{alerted text}{fg=linkcolour}
+
+% Colour hyperlinks with hyperref package
+\hypersetup{urlcolor=linkcolour, colorlinks=true}
+
+% enable columns
+\def\begincols{\begin{columns}}
+\def\begincol{\begin{column}}
+\def\endcol{\end{column}}
+\def\endcols{\end{columns}}
+
+% show layout
+\usepackage{layout}
+
+% enable transparency for background image
+\usepackage{transparent}
