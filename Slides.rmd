@@ -7,13 +7,20 @@ output:
         fig_caption: false
         fig_crop: false
         pandoc_args: "--verbose"
-classoption: "aspectratio=169"
+classoption:
+- "aspectratio=169"
+# "table" uses xcolour for table rows
+- "table"  
 ---
 
 ```{r setup, include=FALSE, results="hide"}
 library(data.table)
 library(ggplot2)
+library(ggmap)
+library(ggtree)
 library(lubridate)
+library(pander)
+library(scales)
 
 set.seed(42)
 
@@ -61,18 +68,565 @@ knitr::opts_chunk$set(
 # colour scheme for plots
 viridis_d <- viridis::viridis_pal()
 heatscale <- RColorBrewer::brewer.pal(6, "YlOrRd")
+
 ```
 
 ```{r mung, include=FALSE, results="hide"}
-# read data
+# map
+map_gp <- readRDS("data/map_gp.Rds")
+
+# kmer histogram
+vvul_hist <- fread("data/vvul_hist.txt")
+vger_hist <- fread("data/vger_hist.txt")
+vvul_peaks <- fread(paste("grep '^[^#]'", "data/vvul_peaks.txt"))
+
+vvul_hist[, species := "V. vulgaris"]
+vger_hist[, species := "V. germanica"]
+combined_hist <- rbind(vvul_hist, vger_hist)
+
+# assembly stats
+assembly_stats <- fread("data/assembly_stats.csv")
+setcolorder(assembly_stats, c("variable", "vger", "vvul", "assembly_type"))
+assembly_names <- c("vger" = "*V. germanica*",
+                    "vvul" = "*V. vulgaris*")
+assembly_types <- c("shortread" = "Short read",
+                    "scaffolded" = "Hi-C scaffolds",
+                    "scaffoldsonly" = "Chromosomes")
+variable_names <- c("scaf_mbp" = "Size (Mb)",
+                    "n_scaffolds" = "Scaffolds",
+                    "L50_kbp" = "*L*~50~ (Kb)",
+                    "busco_complete" = "Complete (%)^1^")
+assembly_stats[, variable := plyr::revalue(variable, variable_names)]
+assembly_stats[, assembly_type := plyr::revalue(assembly_type,
+                                                assembly_types)]
+
+# assembly stats by type
+as_long <- melt(assembly_stats,
+                id.vars = c("variable", "assembly_type"),
+                variable.name = "species")
+assembly_stats_by_species <- dcast(as_long,
+                                   species + variable ~ assembly_type)
+assembly_stats_by_species[, variable := factor(variable, levels = variable_names)]
+setorder(assembly_stats_by_species, species, variable)
+
+# read tree file
+p450_names <- fread("data/p450.ogs", header = FALSE,
+                    col.names = c("protein_name", "gene_name", "og"))
+wasp_specs <- c("Vgerm", "Vpens", "Vvulg")
+vir3 <- viridis::viridis_pal()(3)
+orthogroup <- "OG0000273"
+
+GetTree <- function(orthogroup){
+orthogroup_file <- paste0("data/trees/", orthogroup, "_tree.txt")
+tree_data <- read.newick(orthogroup_file)
+
+# get the tip labels from the tree data
+annot <- data.table(tip_label = tree_data$tip.label,
+                    spec = gsub("_.*", "", tree_data$tip.label))
+annot[spec %in% wasp_specs,
+      gene_name := gsub("V.{4}_r3_6_", "", tip_label)]
+
+# get proper names if we have them
+annot2 <- merge(annot, p450_names, all.x = TRUE)
+
+# mung the tip labels
+annot2[spec %in% wasp_specs & is.na(protein_name),
+       protein_name := gene_name]
+annot2[spec %in% wasp_specs, node_colour := spec]
+annot2[!spec %in% wasp_specs, node_colour := "others"]
+annot2[!spec %in% wasp_specs, protein_name := tip_label]
+annot2[, protein_name := sub("Pdomi_r3_proteins_", "", protein_name)]
+annot2[, protein_name := sub("-mRNA-1-PROTEIN", "", protein_name)]
+annot2[, protein_name := gsub("\\|.*", "", protein_name)]
+
+# tip labels have to be column 1
+setcolorder(annot2, "tip_label")
+
+my_tree <- ggtree(tree_data, layout="circular")
+
+# add the annotation
+my_annotated_tree <- my_tree %<+% annot2 +
+  scale_fill_viridis_d(option = "A") +
+  scale_colour_manual(values = c(alpha("black", 0.5), vir3)) +
+  geom_tippoint(aes(fill = spec, x = x, y = y),
+                shape = 21,
+                size = 1,
+                inherit.aes = FALSE,
+                show.legend = FALSE,
+                stroke = 0.1) +
+  geom_tiplab2(aes(label = protein_name,
+                   colour = node_colour),
+               size = 1,
+               show.legend = FALSE,
+               offset = 0.05)
+return(my_annotated_tree) }
+
+# orthogroup table
+orthogroup_data <- fread("data/Statistics_PerSpecies.tsv",
+                         fill = TRUE,
+                         header = TRUE, nrows = 10)
+setnames(orthogroup_data, "V1", "variable")
+og_long <- melt(orthogroup_data,
+     id.vars = "variable",
+     variable.name = "species")
+og_names <- c("Vgerm.r3.6" = "*V. germanica*",
+                    "Vpens.r3.6" = "*V. pensylvanica*",
+                    "Vvulg.r3.6" = "*V. vulgaris*")
+
+
 ```
 
-## Slides start here
+# *Vespula* species
 
-- here is some content
+\begincols[c]
+\begincol{.30\textwidth}
 
-## Here's a massive wasp
+![](img/Echte_wespe.jpg){height=28mm}
+\centering
 
-![](img/Vespula_vulgaris5.jpg){height=75%}
+*Vespula germanica*^1^  
+German wasp
 
-\source{Image: Holger Gröschl \href{https://creativecommons.org/licenses/by-sa/2.0/de/deed.en}{[CC BY-SA 2.0 de]}}
+\endcol
+\begincol{.30\textwidth}
+
+![](img/vpen.jpg){height=28mm}
+\centering
+
+*Vespula pensylvanica*^2^  
+Western yellowjacket
+
+\endcol
+\begincol{.30\textwidth}
+
+\centering
+
+![](img/Vespula_vulgaris5.jpg){height=28mm}
+
+*Vespula vulgaris*^3^  
+Common wasp
+
+\endcol
+\endcols
+
+\source{\tiny{Images: %
+1 - \href{https://commons.wikimedia.org/w/index.php?curid=2226434}{Baldhur} (Public Domain); 
+2 - \href{https://commons.wikimedia.org/w/index.php?curid=54772856}{Judy Gallagher} (CC BY 2.0); 
+3 - \href{https://commons.wikimedia.org/w/index.php?curid=807900}{Holger Gröschl} (CC BY-SA 2.0 de)}}
+
+# *Vespula* species
+
+```{r species_tree}
+# species tree
+species_data <- fread("data/hymenoptera_genomes.txt",
+      header = FALSE,
+      col.names = c("genus", "species"))
+species_data[, spec_name := paste(genus, species)]
+species_data[, spec_code := paste0(toupper(substring(genus, 1, 1)),
+                      tolower(substring(species, 1, 3)))]
+
+y <- read.newick("data/trees/wg.txt")
+
+# join species names
+tip_dt <- data.table(tip_label = y$tip.label)
+tip_dt[, spec_code := substr(tip_label, 1, 4)]
+new_labels <- merge(tip_dt,
+                    species_data[, .(spec_code, spec_name, species, genus)],
+                    all.x = TRUE)
+setcolorder(new_labels, neworder = c("tip_label"))
+new_labels[genus == "Vespula", is_vespula := TRUE]
+new_labels[genus != "Vespula", is_vespula := FALSE]
+
+gt <- ggtree(y)
+
+gt %<+% new_labels +
+    xlim(c(0, 1.15)) +
+    geom_tiplab(aes(label = spec_name, colour = is_vespula),
+                fontface = "italic",
+                size = 2.5) +
+    scale_colour_brewer(palette = "Set1")
+```
+
+# Invasive *Vespula* spp.
+
+\begincols[c, onlytextwidth]
+\begincol{.6\textwidth}
+
+```{r vespula_worldmap, fig.width=0.6*fw}
+print(map_gp + scale_colour_viridis_d())
+```
+
+\endcol
+\begincol{.4\textwidth}
+
+- Significant pest species
+- Colonies > 500,000 individuals
+- Potential target for genetic control strategies
+- Closest genomes are two *Polistes* spp. 
+
+\endcol
+\endcols
+\source{\tiny{Location data sourced by Philip Lester}}
+
+# *Vespula* short-read assemblies
+
+\begincols[c, onlytextwidth]
+\begincol{.4\textwidth}
+
+```{r vvul_hist, fig.width=0.5*fw}
+ggplot(combined_hist, aes(x = `#Depth`, y = Unique_Kmers, colour = species)) +
+    theme_grey(base_size = 10) +
+        theme(legend.position = c(9/12, 7/8),
+              legend.margin = unit(rep(1, 4), "mm"),
+              legend.background = element_blank(),
+              legend.key = element_blank(),
+              legend.text = element_text(face = "italic")) +
+    geom_path(alpha = 0.75, size = 1.5) +
+    scale_colour_viridis_d(guide = guide_legend(title = NULL)) +
+    scale_y_continuous(
+        trans = "log10",
+        labels = trans_format("log10", math_format(10^.x)),
+        breaks = trans_breaks("log10", function(x) 10^x)) +
+    scale_x_continuous(trans = log_trans(base = 4),
+                       breaks = trans_breaks(function(x) log(x, 4),
+                                             function(x) 4^x)) +
+    xlab("31-mer depth") + ylab("Number of unique 31-mers")
+```
+
+\endcol
+\begincol{.65\textwidth}
+
+\footnotesize 
+
+```{r assembly_stats1}
+stats_frame <- data.frame(
+  assembly_stats[assembly_type == "Short read",
+                 .(variable, vger, vvul)],
+  row.names = "variable")
+setnames(stats_frame, assembly_names)
+pander(stats_frame,
+       justify = "rcc",
+       split.cells = Inf,
+       keep.line.breaks = FALSE,
+       emphasize.rownames = FALSE,
+       big.mark = ",",
+       digits = 1)
+```
+
+\source{\scriptsize{\textsuperscript{1}Complete, single-copy BUSCOs}}
+
+\endcol
+\endcols
+
+# Hi-C scaffolding
+
+\begincols[c, onlytextwidth]
+\begincol{.5\textwidth}
+\centering
+
+![](img/vger_hic.png){height=80mm}
+
+\footnotesize 
+
+*V. germanica*
+
+\endcol
+\begincol{.5\textwidth}
+\centering
+
+![](img/vvul_hic.png){height=80mm}
+
+\footnotesize 
+
+*V. vulgaris*
+
+\endcol
+\endcols
+\source{\latexincludegraphics[keepaspectratio,height=3mm]{%
+  img/phase-genomics-nav-logo.png}}
+
+# Hi-C scaffolding
+
+\begincols[c, onlytextwidth]
+\begincol{.25\textwidth}
+\vfill
+\centering
+
+![](img/vger_hic.png){height=20mm}
+
+\scriptsize 
+
+*V. germanica*
+
+\vspace{10mm}
+
+![](img/vvul_hic.png){height=20mm}
+
+\scriptsize 
+
+*V. vulgaris*
+
+\vfill
+\endcol
+\begincol{.7\textwidth}
+\vfill
+\raggedright
+\footnotesize
+
+```{r vger_hic_stats}
+vger_tab <- assembly_stats_by_species[species == "vger", 
+                          .(variable, `Short read`, `Hi-C scaffolds`)]
+setnames(vger_tab, "variable", "&nbsp;")
+pander(vger_tab,
+              justify = "rcc",
+       split.cells = Inf,
+       keep.line.breaks = FALSE,
+       emphasize.rownames = FALSE,
+       big.mark = ",",
+       digits = 1,
+       emphasize.strong.cols = 3)
+```
+
+```{r vvul_hic_stats}
+vvul_tab <- assembly_stats_by_species[species == "vvul", 
+                          .(variable, `Short read`, `Hi-C scaffolds`)]
+setnames(vvul_tab, "variable", "&nbsp;")
+pander(vvul_tab,
+              justify = "rcc",
+       split.cells = Inf,
+       keep.line.breaks = FALSE,
+       emphasize.rownames = FALSE,
+       big.mark = ",",
+       digits = 1,
+       emphasize.strong.cols = 3)
+```
+
+\vfill
+\endcol
+\begincol{.05\textwidth}
+\endcol
+\endcols
+
+\source{\scriptsize{\textsuperscript{1}Complete, single-copy BUSCOs}}
+
+# Scaffolds oriented with D-GENIES
+
+![](img/chr_layout.png){height=200pt}
+
+\source{Joseph Guhlin}
+
+# Chromosome-scale assemblies
+
+\begincols[c, onlytextwidth]
+\begincol{.25\textwidth}
+
+\centering
+
+![](img/chr_layout.png){width=35mm}
+
+\endcol
+\begincol{.75\textwidth}
+\vfill
+\raggedright
+\footnotesize
+
+\centering
+*V. germanica*
+
+```{r vger_hic_stats3}
+vger_tab <- assembly_stats_by_species[species == "vger", 
+                          .(variable,
+                            `Short read`,
+                            `Hi-C scaffolds`,
+                            Chromosomes)]
+setnames(vger_tab, "variable", "&nbsp;")
+pander(vger_tab,
+              justify = "rccc",
+       split.cells = Inf,
+       keep.line.breaks = FALSE,
+       emphasize.rownames = FALSE,
+       big.mark = ",",
+       digits = 1,
+       emphasize.strong.cols = 4)
+```
+
+\centering
+*V. vulgaris*
+
+```{r vvul_hic_stats3}
+vvul_tab <- assembly_stats_by_species[species == "vvul", 
+                          .(variable,
+                            `Short read`,
+                            `Hi-C scaffolds`,
+                            Chromosomes)]
+setnames(vvul_tab, "variable", "&nbsp;")
+pander(vvul_tab,
+              justify = "rccc",
+       split.cells = Inf,
+       keep.line.breaks = FALSE,
+       emphasize.rownames = FALSE,
+       big.mark = ",",
+       digits = 1,
+       emphasize.strong.cols = 4)
+```
+
+\vfill
+\endcol
+\endcols
+
+\source{\scriptsize{\textsuperscript{1}Complete, single-copy BUSCOs}}
+
+# Conservation of synteny
+
+\begincols[c, onlytextwidth]
+\begincol{.5\textwidth}
+
+![](img/chr03.png){height=30mm}
+
+![](img/chr05.png){height=30mm}
+
+\endcol
+\begincol{.5\textwidth}
+
+- Synteny suggests some chromosomal rearrangements between species
+  - SNPs?
+  - Sequence over breakpoints (Nanopore)?
+
+\endcol
+\endcols
+
+\source{Joseph Guhlin}
+
+# Manual gene annotation
+
+![](img/apollo-p450-cluster.png){height=80mm}
+
+\source{Thanks to the team of annotators!}
+
+# Iterative annotation
+
+\centering
+\footnotesize
+`FunAnnotate`  
+↓  
+`GeneValidator`  
+↓  
+`Augustus`  
+↓  
+`...`  
+↓  
+`Orthofinder`
+
+
+```{r orthogroup_stats}
+orthogroup_table <- dcast(og_long[species %in% names(og_names)],
+      variable ~ species, value.var = "value")
+setnames(orthogroup_table, names(og_names), og_names)
+setnames(orthogroup_table, "variable", "&nbsp;")
+pander(orthogroup_table[c(1:2,6)],
+       justify = "rccc",
+       split.cells = Inf,
+       split.tables = Inf,
+       keep.line.breaks = FALSE,
+       emphasize.rownames = FALSE,
+       big.mark = ",",
+       digits = 1)
+```
+
+\source{Joseph Guhlin}
+# *Vespula* CYPomes
+
+\begincols[c]
+\begincol{.50\textwidth}
+
+```{r OG0000273_tree, fig.width=0.5*fw}
+OG0000273_tree <- GetTree("OG0000273")
+
+print(OG0000273_tree + xlim(c(-0.1, 3)))
+```
+
+\centering
+
+*Cyp4* orthogroup
+
+\endcol
+\begincol{.50\textwidth}
+
+```{r OG0002213_tree, fig.width=0.5*fw}
+OG0002213_tree <- GetTree("OG0002213")
+
+print(OG0002213_tree + xlim(c(-0.1, 1.1)))
+
+```
+
+\centering
+
+Mitochondrial P450 orthogroup
+
+\endcol
+\endcols
+
+# Summary
+
+\begincols[c]
+\begincol{.50\textwidth}
+
+```{r OROG_tree, fig.width=0.5*fw}
+orthogroup_file <- "data/trees/OROG.txt"
+tree_data <- read.newick(orthogroup_file)
+
+# get the tip labels from the tree data
+annot <- data.table(tip_label = tree_data$tip.label,
+                    spec = gsub("_.*", "", tree_data$tip.label))
+annot[spec %in% wasp_specs,
+      gene_name := gsub("V.{4}_r3_6_", "", tip_label)]
+
+# mung the tip labels
+annot[spec %in% wasp_specs,
+       protein_name := gene_name]
+annot[spec %in% wasp_specs, node_colour := spec]
+annot[!spec %in% wasp_specs, node_colour := "others"]
+annot[!spec %in% wasp_specs, protein_name := tip_label]
+annot[, protein_name := sub("Pdomi_r3_proteins_", "", protein_name)]
+annot[, protein_name := sub("-mRNA-1-PROTEIN", "", protein_name)]
+annot[, protein_name := gsub("\\|.*", "", protein_name)]
+
+# tip labels have to be column 1
+setcolorder(annot, "tip_label")
+
+# draw the tree
+my_tree <- ggtree(tree_data, layout="circular")
+
+# add the annotation
+my_annotated_tree <- my_tree %<+% annot +
+    scale_fill_viridis_d(option = "A") +
+    scale_colour_manual(values = c(alpha("black", 0.5), vir3)) +
+    geom_tippoint(aes(fill = spec, x = x, y = y),
+                  shape = 21,
+                  size = 1,
+                  stroke = 0.1,
+                  inherit.aes = FALSE,
+                  show.legend = FALSE) +
+    geom_tiplab2(aes(label = protein_name,
+                     colour = node_colour),
+                 size = 1,
+                 show.legend = FALSE,
+                 offset = 0.05)
+
+my_annotated_tree + xlim(c(-0.1, 1.1))
+```
+
+\centering
+
+Wasp-specific OR orthogroup?
+
+\endcol
+\begincol{.50\textwidth}
+
+- Reference-quality, near-complete assemblies using short-read sequencing & Hi-C scaffolding
+- Comparisons between species allowed orientation and anchoring of scaffolds
+- Manual curation and iterative improvement resulted in a comprehensive annotation
+- Targets for a gene drive...?
+
+\endcol
+\endcols
